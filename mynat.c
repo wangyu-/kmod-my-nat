@@ -18,9 +18,9 @@ typedef unsigned int u32_t;
 typedef unsigned short u16_t;
 
 char my_ip[]="192.168.99.176";
-int my_port=8080;
+int my_port=8000;
 char tg_ip[]="45.76.100.53"; //ip of target
-int tg_port=8080;
+int tg_port=9000;
 
 char if_to_tg[]="ens33";    //network interface to
 char if_to_cl[]="ens33";    //network interface to client
@@ -115,9 +115,9 @@ void tcp_chk_upd(u32_t src,u32_t dst,struct tcphdr *hdr,u32_t tot_len)
 	psh.dest_address =  dst;
 	psh.placeholder = 0;
 	psh.protocol = 6;
-	psh.tcp_length = htons(  tcp_tot_len);
+	psh.tcp_length = htons(  tot_len);
 	hdr->check=0;
-	hdr->check=csum_with_header((char *)(&psh),sizeof(psh),(u16_t *)hdr,tcp_tot_len );
+	hdr->check=csum_with_header((char *)(&psh),sizeof(psh),(u16_t *)hdr,tot_len );
 }
 static unsigned int pre_routing_hook(void *priv,
 		struct sk_buff *skb,
@@ -163,6 +163,8 @@ static unsigned int pre_routing_hook(void *priv,
 
 		csum_replace4(&iph->check, iph->saddr, my_ip_u32);
 		iph->saddr = my_ip_u32;
+		
+		hdr->dest=tg_port_u16;
 
 		tcp_chk_upd(iph->saddr,iph->daddr,hdr,tcp_tot_len);
 
