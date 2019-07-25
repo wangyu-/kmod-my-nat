@@ -20,7 +20,7 @@ typedef unsigned short u16_t;
 char my_ip[]="192.168.99.176";
 int my_port=8000;
 char tg_ip[]="45.76.100.53"; //ip of target
-int tg_port=9000;
+int tg_port=80;
 
 char if_name[]="ens33";    //network interface, currently only support one interface
 
@@ -156,11 +156,13 @@ static unsigned int pre_routing_hook(void *priv,
 
 		cl_ip_u32=iph->saddr;
 
-		csum_replace4(&iph->check, iph->daddr, tg_ip_u32);
+		//csum_replace4(&iph->check, iph->daddr, tg_ip_u32);
 		iph->daddr = tg_ip_u32;
 
-		csum_replace4(&iph->check, iph->saddr, my_ip_u32);
+		//csum_replace4(&iph->check, iph->saddr, my_ip_u32);
 		iph->saddr = my_ip_u32;
+		iph->check=0;
+		iph->check=csum_with_header(0,0,(u16_t*)iph,iph->ihl*4);
 		
 		hdr->dest=tg_port_u16;
 
@@ -205,11 +207,13 @@ static unsigned int pre_routing_hook(void *priv,
 
 		printk("before,%pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 
-		csum_replace4(&iph->check, iph->daddr, cl_ip_u32);
+		//csum_replace4(&iph->check, iph->daddr, cl_ip_u32);
 		iph->daddr = cl_ip_u32;
 
-		csum_replace4(&iph->check, iph->saddr, my_ip_u32);
+		//csum_replace4(&iph->check, iph->saddr, my_ip_u32);
 		iph->saddr = my_ip_u32;
+		iph->check=0;
+		iph->check=csum_with_header(0,0,(u16_t*)iph,iph->ihl*4);
 		
 		hdr->source=my_port_u16;
 
