@@ -17,11 +17,16 @@
 typedef unsigned int u32_t;
 typedef unsigned short u16_t;
 
-char my_ip[]="192.168.99.176"; //the ip you listen on
+char *my_ip="192.168.99.176"; //the ip you listen on
 int my_port=8000;  // port listen on
 
-char tg_ip[]="45.76.100.53"; //ip of target
+char *tg_ip="45.76.100.53"; //ip of target
 int tg_port=80; //port of target
+
+module_param (my_ip, charp, S_IRUGO);
+module_param (my_port, uint, S_IRUGO);
+module_param (tg_ip, charp, S_IRUGO);
+module_param (tg_port, uint, S_IRUGO);
 
 static unsigned char tg_hwaddr[ETH_ALEN]={0};
 int got_tg_hwaddr=0;
@@ -144,7 +149,7 @@ static unsigned int pre_routing_hook(void *priv,
 	
 	if(!got_tg_hwaddr&&iph->saddr==tg_ip_u32)
 	{
-		printk("catched a packet from targer, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
+		printk("caught a packet from target, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 		struct ethhdr *eh = eth_hdr(skb);
 		for(i=0;i<ETH_ALEN;i++)
 			tg_hwaddr[i]=eh->h_source[i];
@@ -209,7 +214,7 @@ static unsigned int pre_routing_hook(void *priv,
 
 		ret=dev_queue_xmit(skb);
 
-		printk("got a packet1,%d\n",ret);
+		//printk("got a packet1,%d\n",ret);
 		return NF_STOLEN;
 
 		/*
@@ -332,6 +337,7 @@ int init_module()
 	tg_ip_u32=in_aton(tg_ip);
 	my_port_u16=htons(my_port);
 	tg_port_u16=htons(tg_port);
+	printk("my_ip=%s my_port=%d tg_ip=%s tg_port=%d",my_ip,my_port,tg_ip,tg_port);
 	if(ret==0)
 		printk("load ok\n");
 	else
