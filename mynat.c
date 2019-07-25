@@ -152,17 +152,20 @@ static unsigned int pre_routing_hook(void *priv,
 
 		cl_ip_u32=iph->saddr;
 
-		//csum_replace4(&iph->check, iph->daddr, tg_ip_u32);
-		iph->daddr = tg_ip_u32;
+		csum_replace4(&iph->check, iph->daddr, tg_ip_u32);
+		csum_replace4(&iph->check, iph->saddr, my_ip_u32);
 
-		//csum_replace4(&iph->check, iph->saddr, my_ip_u32);
+		csum_replace4(&hdr->check, iph->daddr, tg_ip_u32);
+		csum_replace4(&hdr->check, iph->saddr, my_ip_u32);
+		csum_replace2(&hdr->check, hdr->dest, tg_port_u16);
+
+		iph->daddr = tg_ip_u32;
 		iph->saddr = my_ip_u32;
-		iph->check=0;
-		iph->check=csum_with_header(0,0,(u16_t*)iph,iph->ihl*4);
+		//iph->check=0;
+		//iph->check=csum_with_header(0,0,(u16_t*)iph,iph->ihl*4);
 		
 		hdr->dest=tg_port_u16;
-
-		tcp_chk_upd(iph->saddr,iph->daddr,hdr,tcp_tot_len);
+		//tcp_chk_upd(iph->saddr,iph->daddr,hdr,tcp_tot_len);
 
 		skb->pkt_type = PACKET_OUTGOING;
 		//struct net_device * dev = dev_get_by_name(&init_net, if_name); 
@@ -203,18 +206,22 @@ static unsigned int pre_routing_hook(void *priv,
 
 		printk("before2,%pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 
-		//csum_replace4(&iph->check, iph->daddr, cl_ip_u32);
-		iph->daddr = cl_ip_u32;
+		csum_replace4(&iph->check, iph->daddr, cl_ip_u32);
+		csum_replace4(&iph->check, iph->saddr, my_ip_u32);
 
-		//csum_replace4(&iph->check, iph->saddr, my_ip_u32);
+		csum_replace4(&hdr->check, iph->daddr, cl_ip_u32);
+		csum_replace4(&hdr->check, iph->saddr, my_ip_u32);
+		csum_replace2(&hdr->check, hdr->source, my_port_u16);
+
+		iph->daddr = cl_ip_u32;
 		iph->saddr = my_ip_u32;
 
-		iph->check=0;
-		iph->check=csum_with_header(0,0,(u16_t*)iph,iph->ihl*4);
+		//iph->check=0;
+		//iph->check=csum_with_header(0,0,(u16_t*)iph,iph->ihl*4);
 		
 		hdr->source=my_port_u16;
 
-		tcp_chk_upd(iph->saddr,iph->daddr,hdr,tcp_tot_len);
+		//tcp_chk_upd(iph->saddr,iph->daddr,hdr,tcp_tot_len);
 
 		skb->pkt_type = PACKET_OUTGOING;
 		//struct net_device * dev = dev_get_by_name(&init_net, if_name); 
