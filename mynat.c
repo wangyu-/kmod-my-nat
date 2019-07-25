@@ -68,11 +68,12 @@ unsigned short csum_with_header(char* header,int hlen,const unsigned short *ptr,
 	long sum;
 	unsigned short oddbyte;
 	short answer;
+	unsigned short *tmp;
 	int i;
 	//assert(hlen%2==0);
 
 	sum=0;
-	unsigned short * tmp= (unsigned short *)header;
+	tmp= (unsigned short *)header;
 	for(i=0;i<hlen/2;i++)
 	{
 		sum+=*tmp++;
@@ -96,34 +97,31 @@ unsigned short csum_with_header(char* header,int hlen,const unsigned short *ptr,
 	return(answer);
 }
 
+/*
 static unsigned int local_out_hook (void *priv,
 		struct sk_buff *skb,
 		const struct nf_hook_state *state)
 {
 	struct iphdr *iph;
 	unsigned int hdroff;
-	struct tcphdr *hdr;
+	//struct tcphdr *hdr;
 	int iphdroff=0;
-	int hdrsize= sizeof(struct tcphdr);
-	int err;
 	iph = (void *)skb->data + iphdroff;
 	hdroff = iphdroff + iph->ihl * 4;	
-/*
+
 	if(ok==0&&iph->daddr==dst_ip_u32)
 	{
-		ok=1;
-		memcpy(dst_hwaddr, (eth_hdr(skb)->h_dest), ETH_ALEN);
+		//ok=1;
+		//memcpy(dst_hwaddr, (eth_hdr(skb)->h_dest), ETH_ALEN);
 		printk("okay!! %pM\n",dst_hwaddr);
-	}*/
-	
-	
-
+	}
 	
 	return NF_ACCEPT;
 	
-}
+}*/
+
 void tcp_chk_upd(u32_t src,u32_t dst,struct tcphdr *hdr,u32_t tot_len) 
-	//the checksum update function of kernel is not straight forward, so we implement our own slower one
+	//the checksum update function of kernel is not straight forward, so we implement our own slower one  //unfortunately, this doesnt work, since data in skb is not continous
 {
 	struct pseudo_header psh;
 	psh.source_address = src;
@@ -142,16 +140,18 @@ static unsigned int pre_routing_hook(void *priv,
 	unsigned int hdroff;
 	struct tcphdr *hdr;
 	int iphdroff=0;
-	int hdrsize= sizeof(struct tcphdr);
-	int ret,err;
-	int i,j,k;
+	int ret;
+	int i;
+	int tcp_tot_len;
+	struct ethhdr *eh;
+
 	iph = (void *)skb->data + iphdroff;
 	hdroff = iphdroff + iph->ihl * 4;	
 	
 	if(!got_tg_hwaddr&&iph->saddr==tg_ip_u32)
 	{
 		printk("caught a packet from target, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
-		struct ethhdr *eh = eth_hdr(skb);
+		eh = eth_hdr(skb);
 		for(i=0;i<ETH_ALEN;i++)
 			tg_hwaddr[i]=eh->h_source[i];
 		got_tg_hwaddr=1;
@@ -162,7 +162,7 @@ static unsigned int pre_routing_hook(void *priv,
 	if(skb->len < hdroff + sizeof(struct tcphdr)) return NF_ACCEPT;
 	hdr = (struct tcphdr *)(skb->data + hdroff);
 
-	int tcp_tot_len=ntohs(iph->tot_len)  - iph->ihl*4;
+	tcp_tot_len=ntohs(iph->tot_len)  - iph->ihl*4;
 	if(skb->len< hdroff+ tcp_tot_len) 
 	{
 		printk("fail0\n");
@@ -200,7 +200,7 @@ static unsigned int pre_routing_hook(void *priv,
 		//struct net_device * dev = dev_get_by_name(&init_net, if_name); 
 		//skb->dev=dev;
 
-		struct ethhdr *eh = eth_hdr(skb);
+		eh = eth_hdr(skb);
 		
 		skb->data = (unsigned char *)eh;
 		skb->len += ETH_HLEN; //sizeof(sb->mac.ethernet);
@@ -261,7 +261,7 @@ static unsigned int pre_routing_hook(void *priv,
 		//struct net_device * dev = dev_get_by_name(&init_net, if_name); 
 		//skb->dev=dev;
 
-		struct ethhdr *eh = eth_hdr(skb);
+		eh = eth_hdr(skb);
 		
 		skb->data = (unsigned char *)eh;
 		skb->len += ETH_HLEN; //sizeof(sb->mac.ethernet);
@@ -299,8 +299,6 @@ static unsigned int post_routing_hook (void *priv,
 	unsigned int hdroff;
 	struct tcphdr *hdr;
 	int iphdroff=0;
-	int hdrsize= sizeof(struct tcphdr);
-	int err;
 	iph = (void *)skb->data + iphdroff;
 	hdroff = iphdroff + iph->ihl * 4;	
 	if(iph->protocol!=6) return NF_ACCEPT;
@@ -345,7 +343,7 @@ int init_module()
 	tg_ip_u32=in_aton(tg_ip);
 	my_port_u16=htons(my_port);
 	tg_port_u16=htons(tg_port);
-	printk("my_ip=%s my_port=%d tg_ip=%s tg_port=%d",my_ip,my_port,tg_ip,tg_port);
+	printk("my_ip=%s my_port=%d tg_ip=%s tg_port=%d\n",my_ip,my_port,tg_ip,tg_port);
 	if(ret==0)
 		printk("load ok\n");
 	else
