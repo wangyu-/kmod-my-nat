@@ -17,7 +17,7 @@
 typedef unsigned int u32_t;
 typedef unsigned short u16_t;
 
-char my_ip[]="192.168.99.176"; //the ip you listen on
+char my_ip[]="192.168.99.192"; //the ip you listen on
 int my_port=8000;  // port listen on
 
 char tg_ip[]="45.76.100.53"; //ip of target
@@ -77,33 +77,6 @@ unsigned short csum_with_header(char* header,int hlen,const unsigned short *ptr,
 
 	return(answer);
 }
-
-static unsigned int local_out_hook (void *priv,
-		struct sk_buff *skb,
-		const struct nf_hook_state *state)
-{
-	struct iphdr *iph;
-	unsigned int hdroff;
-	struct tcphdr *hdr;
-	int iphdroff=0;
-	int hdrsize= sizeof(struct tcphdr);
-	int err;
-	iph = (void *)skb->data + iphdroff;
-	hdroff = iphdroff + iph->ihl * 4;	
-/*
-	if(ok==0&&iph->daddr==dst_ip_u32)
-	{
-		ok=1;
-		memcpy(dst_hwaddr, (eth_hdr(skb)->h_dest), ETH_ALEN);
-		printk("okay!! %pM\n",dst_hwaddr);
-	}*/
-	
-	
-
-	
-	return NF_ACCEPT;
-	
-}
 void tcp_chk_upd(u32_t src,u32_t dst,struct tcphdr *hdr,u32_t tot_len) 
 	//the checksum update function of kernel is not straight forward, so we implement our own slower one
 {
@@ -116,9 +89,16 @@ void tcp_chk_upd(u32_t src,u32_t dst,struct tcphdr *hdr,u32_t tot_len)
 	hdr->check=0;
 	hdr->check=csum_with_header((char *)(&psh),sizeof(psh),(u16_t *)hdr,tot_len );
 }
-static unsigned int pre_routing_hook(void *priv,
-		struct sk_buff *skb,
-		const struct nf_hook_state *state)
+static unsigned int pre_routing_hook(const struct nf_hook_ops *ops,
+                               struct sk_buff *skb,
+                               const struct net_device *in,
+                               const struct net_device *out,
+#ifndef __GENKSYMS__
+                               const struct nf_hook_state *state
+#else
+                               int (*okfn)(struct sk_buff *)
+#endif
+                               )
 {
 	struct iphdr *iph;
 	unsigned int hdroff;
@@ -245,53 +225,11 @@ static unsigned int pre_routing_hook(void *priv,
 	return NF_ACCEPT;
 	
 }
-static unsigned int post_routing_hook (void *priv,
-		struct sk_buff *skb,
-		const struct nf_hook_state *state)
-{
-	struct iphdr *iph;
-	unsigned int hdroff;
-	struct tcphdr *hdr;
-	int iphdroff=0;
-	int hdrsize= sizeof(struct tcphdr);
-	int err;
-	iph = (void *)skb->data + iphdroff;
-	hdroff = iphdroff + iph->ihl * 4;	
-	if(iph->protocol!=6) return NF_ACCEPT;
-	if(skb->len < hdroff + sizeof(struct tcphdr)) return NF_ACCEPT;
-	hdr = (struct tcphdr *)(skb->data + hdroff);
-
-/*	
-	if(iph->daddr==my_ip_u32&&hdr->dest==my_port_u16)
-	{
-		if (!skb_make_writable(skb, iphdroff + sizeof(*iph)))
-		{	
-			printk("fail1");
-			return NF_ACCEPT;
-		}
-		csum_replace4(&iph->check, iph->daddr, dst_ip_u32);
-		iph->daddr = dst_ip_u32;
-	}*/
-	return NF_ACCEPT;	
-}
-
 static struct nf_hook_ops nf_my_nat_ops[] = {
         {
                 .hook           = pre_routing_hook,
                 .pf             = NFPROTO_IPV4,
                 .hooknum        = NF_INET_PRE_ROUTING,
-                .priority       = NF_IP_PRI_FIRST,
-        },
-        {
-                .hook           = post_routing_hook,
-                .pf             = NFPROTO_IPV4,
-                .hooknum        = NF_INET_POST_ROUTING,
-                .priority       = NF_IP_PRI_FIRST,
-        },
-        {
-                .hook           = local_out_hook,
-                .pf             = NFPROTO_IPV4,
-                .hooknum        = NF_INET_LOCAL_OUT,
                 .priority       = NF_IP_PRI_FIRST,
         },
 };
