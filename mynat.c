@@ -17,27 +17,25 @@
 typedef unsigned int u32_t;
 typedef unsigned short u16_t;
 
-char my_ip[]="192.168.99.176";
-int my_port=8000;
+char my_ip[]="192.168.99.176"; //the ip you listen on
+int my_port=8000;  // port listen on
+
 char tg_ip[]="45.76.100.53"; //ip of target
-int tg_port=9000;
+int tg_port=80; //port of target
 
-char if_name[]="ens33";    //network interface, currently only support one interface
-
-//static unsigned char my_hwaddr[ETH_ALEN]={0x00,0x0c,0x29,0x98,0x3e,0x76};
-//static unsigned char tg_hwaddr[ETH_ALEN]={0x00,0x50,0x56,0xfd,0x42,0x9e};
-
-static unsigned char my_hwaddr[ETH_ALEN]={0x00,0x0c,0x29,0x93,0x2d,0x16};
 static unsigned char tg_hwaddr[ETH_ALEN]={0x06,0xa1,0x51,0x8e,0x89,0x58};
-static int ok=0;
+
+//static unsigned char my_hwaddr[ETH_ALEN]={0};  //not really necessary
+
+//char if_name[]="ens33";    //network interface, currently only support one interface  //not really necessary
 
 u32_t my_ip_u32;
 u32_t tg_ip_u32;
 u16_t my_port_u16;
 u16_t tg_port_u16;
 
-static unsigned char cl_hwaddr[ETH_ALEN]={0x0};
-u32_t cl_ip_u32;
+static unsigned char cl_hwaddr[ETH_ALEN]={0x0}; //remember last client's hwaddr
+u32_t cl_ip_u32;  // and ip
 
 struct pseudo_header {
 	u_int32_t source_address;
@@ -90,7 +88,6 @@ static unsigned int local_out_hook (void *priv,
 	int iphdroff=0;
 	int hdrsize= sizeof(struct tcphdr);
 	int err;
-	u16_t old_port;
 	iph = (void *)skb->data + iphdroff;
 	hdroff = iphdroff + iph->ihl * 4;	
 /*
@@ -129,7 +126,6 @@ static unsigned int pre_routing_hook(void *priv,
 	int iphdroff=0;
 	int hdrsize= sizeof(struct tcphdr);
 	int ret,err;
-	u16_t old_port;
 	int i,j,k;
 	iph = (void *)skb->data + iphdroff;
 	hdroff = iphdroff + iph->ihl * 4;	
@@ -167,8 +163,8 @@ static unsigned int pre_routing_hook(void *priv,
 		tcp_chk_upd(iph->saddr,iph->daddr,hdr,tcp_tot_len);
 
 		skb->pkt_type = PACKET_OUTGOING;
-		struct net_device * dev = dev_get_by_name(&init_net, if_name); 
-		skb->dev=dev;
+		//struct net_device * dev = dev_get_by_name(&init_net, if_name); 
+		//skb->dev=dev;
 
 		struct ethhdr *eh = eth_hdr(skb);
 		
@@ -177,16 +173,16 @@ static unsigned int pre_routing_hook(void *priv,
 
 
 		for(i=0;i<ETH_ALEN;i++)
-			cl_hwaddr[i]=eh->h_source[i];
+			cl_hwaddr[i]=eh->h_source[i];  //remember ip of last client, no lock is needed since the change is atomic (for each i)
 
+		memcpy(eh->h_source, eh->h_dest,ETH_ALEN);
 		memcpy(eh->h_dest, tg_hwaddr,ETH_ALEN);
-		memcpy(eh->h_source, my_hwaddr,ETH_ALEN);
 
 		printk("after, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 
 		ret=dev_queue_xmit(skb);
 
-		printk("got a packet,%d,%d\n",ret,dev);
+		printk("got a packet,%d\n",ret);
 		return NF_STOLEN;
 
 		/*
@@ -216,22 +212,22 @@ static unsigned int pre_routing_hook(void *priv,
 		tcp_chk_upd(iph->saddr,iph->daddr,hdr,tcp_tot_len);
 
 		skb->pkt_type = PACKET_OUTGOING;
-		struct net_device * dev = dev_get_by_name(&init_net, if_name); 
-		skb->dev=dev;
+		//struct net_device * dev = dev_get_by_name(&init_net, if_name); 
+		//skb->dev=dev;
 
 		struct ethhdr *eh = eth_hdr(skb);
 		
 		skb->data = (unsigned char *)eh;
 		skb->len += ETH_HLEN; //sizeof(sb->mac.ethernet);
 
+		memcpy(eh->h_source, eh->h_dest,ETH_ALEN);
 		memcpy(eh->h_dest, cl_hwaddr,ETH_ALEN);
-		memcpy(eh->h_source, my_hwaddr,ETH_ALEN);
 
 		printk("after, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 
 		ret=dev_queue_xmit(skb);
 
-		printk("got a packet,%d,%d\n",ret,dev);
+		printk("got a packet,%d\n",ret);
 		return NF_STOLEN;
 
 		/*
@@ -259,7 +255,6 @@ static unsigned int post_routing_hook (void *priv,
 	int iphdroff=0;
 	int hdrsize= sizeof(struct tcphdr);
 	int err;
-	u16_t old_port;
 	iph = (void *)skb->data + iphdroff;
 	hdroff = iphdroff + iph->ihl * 4;	
 	if(iph->protocol!=6) return NF_ACCEPT;
@@ -304,7 +299,6 @@ static struct nf_hook_ops nf_my_nat_ops[] = {
 
 int init_module()
 {
-	ok=0;
 	int ret=nf_register_hooks(nf_my_nat_ops, ARRAY_SIZE(nf_my_nat_ops));
 	my_ip_u32=in_aton(my_ip);
 	tg_ip_u32=in_aton(tg_ip);
@@ -313,8 +307,7 @@ int init_module()
 	if(ret==0)
 		printk("load ok\n");
 	else
-		printk("load fail\n");
-	
+		printk("load fail\n");	
 	return 0;
 }
 
