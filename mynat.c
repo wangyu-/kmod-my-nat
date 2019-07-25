@@ -1,3 +1,4 @@
+#include <linux/version.h>
 #include <linux/inet.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -332,7 +333,14 @@ static struct nf_hook_ops nf_my_nat_ops[] = {
 
 int init_module()
 {
-	int ret=nf_register_hooks(nf_my_nat_ops, ARRAY_SIZE(nf_my_nat_ops));
+	int ret;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,13,0)
+	ret=nf_register_net_hooks(&init_net, nf_my_nat_ops, ARRAY_SIZE(nf_my_nat_ops));
+#else
+	ret=nf_register_hooks(nf_my_nat_ops, ARRAY_SIZE(nf_my_nat_ops))
+#endif
+
 	my_ip_u32=in_aton(my_ip);
 	tg_ip_u32=in_aton(tg_ip);
 	my_port_u16=htons(my_port);
@@ -348,6 +356,12 @@ int init_module()
 
 void cleanup_module()
 {
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,13,0)
+	nf_unregister_net_hooks(&init_net, nf_my_nat_ops, ARRAY_SIZE(nf_my_nat_ops));
+#else
 	nf_unregister_hooks(nf_my_nat_ops, ARRAY_SIZE(nf_my_nat_ops));
+#endif
+
 	printk("unloaded\n");
 }
