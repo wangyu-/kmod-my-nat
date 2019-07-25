@@ -23,7 +23,8 @@ int my_port=8000;  // port listen on
 char tg_ip[]="45.76.100.53"; //ip of target
 int tg_port=80; //port of target
 
-static unsigned char tg_hwaddr[ETH_ALEN]={0x06,0xa1,0x51,0x8e,0x89,0x58};
+static unsigned char tg_hwaddr[ETH_ALEN]={0};
+int got_tg_hwaddr=0;
 
 //static unsigned char my_hwaddr[ETH_ALEN]={0};  //not really necessary
 
@@ -34,8 +35,19 @@ u32_t tg_ip_u32;
 u16_t my_port_u16;
 u16_t tg_port_u16;
 
-static unsigned char cl_hwaddr[ETH_ALEN]={0x0}; //remember last client's hwaddr
-u32_t cl_ip_u32;  // and ip
+//static unsigned char cl_hwaddr[ETH_ALEN]={0x0}; //remember last client's hwaddr
+//u32_t cl_ip_u32;  // and ip
+
+struct client_info_t
+{
+	u32_t ip_u32;
+	unsigned char hwaddr[ETH_ALEN];
+};
+
+struct client_info_t cl_info[65535]; //a dirty hash table to remember info of clients.   
+//hash by port of client
+//there will be problems if two clients use the same port (but its rare)
+//TODO fix it later
 
 struct pseudo_header {
 	u_int32_t source_address;
@@ -129,6 +141,17 @@ static unsigned int pre_routing_hook(void *priv,
 	int i,j,k;
 	iph = (void *)skb->data + iphdroff;
 	hdroff = iphdroff + iph->ihl * 4;	
+	
+	if(!got_tg_hwaddr&&iph->saddr==tg_ip_u32)
+	{
+		printk("catched a packet from targer, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
+		struct ethhdr *eh = eth_hdr(skb);
+		for(i=0;i<ETH_ALEN;i++)
+			tg_hwaddr[i]=eh->h_source[i];
+		got_tg_hwaddr=1;
+	}
+
+
 	if(iph->protocol!=6) return NF_ACCEPT;
 	if(skb->len < hdroff + sizeof(struct tcphdr)) return NF_ACCEPT;
 	hdr = (struct tcphdr *)(skb->data + hdroff);
@@ -142,15 +165,15 @@ static unsigned int pre_routing_hook(void *priv,
 	
 	if(iph->daddr==my_ip_u32&&hdr->dest==my_port_u16)
 	{
-		/*if (!skb_make_writable(skb, iphdroff + sizeof(*iph)))
+		if (!skb_make_writable(skb, iphdroff + skb->len))
 		{	
-			printk("fail1i\n");
+			printk("fail1.0\n");
 			return NF_ACCEPT;
-		}*/
+		}
 
-		printk("before1,%pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
+		//printk("before1,%pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 
-		cl_ip_u32=iph->saddr;
+		cl_info[hdr->source].ip_u32=iph->saddr;
 
 		csum_replace4(&iph->check, iph->daddr, tg_ip_u32);
 		csum_replace4(&iph->check, iph->saddr, my_ip_u32);
@@ -176,14 +199,13 @@ static unsigned int pre_routing_hook(void *priv,
 		skb->data = (unsigned char *)eh;
 		skb->len += ETH_HLEN; //sizeof(sb->mac.ethernet);
 
-
 		for(i=0;i<ETH_ALEN;i++)
-			cl_hwaddr[i]=eh->h_source[i];  //remember ip of last client, no lock is needed since the change is atomic (for each i)
+			cl_info[hdr->source].hwaddr[i]=eh->h_source[i];  //remember ip of last client, no lock is needed since the change is atomic (for each i)
 
 		memcpy(eh->h_source, eh->h_dest,ETH_ALEN);
 		memcpy(eh->h_dest, tg_hwaddr,ETH_ALEN);
 
-		printk("after1, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
+		//printk("after1, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 
 		ret=dev_queue_xmit(skb);
 
@@ -194,17 +216,23 @@ static unsigned int pre_routing_hook(void *priv,
 		err=ip_route_me_harder(state->net, skb, RTN_UNSPEC);
 		if(err<0)
 		{
-			printk("fail2");
+			printk("fail1.2");
 		}
 		skb_dst_drop(skb);
-		printk("got a packet,%d\n",err);
+		//printk("got a packet,%d\n",err);
 		return NF_ACCEPT;*/
 	}
 
 	else if(iph->saddr==tg_ip_u32&&hdr->source==tg_port_u16 && iph->daddr==my_ip_u32)
 	{
+		if (!skb_make_writable(skb, iphdroff + skb->len))
+		{	
+			printk("fail2.0\n");
+			return NF_ACCEPT;
+		}
 
-		printk("before2,%pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
+		//printk("before2,%pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
+		u32_t cl_ip_u32=cl_info[hdr->dest].ip_u32;
 
 		csum_replace4(&iph->check, iph->daddr, cl_ip_u32);
 		csum_replace4(&iph->check, iph->saddr, my_ip_u32);
@@ -233,20 +261,20 @@ static unsigned int pre_routing_hook(void *priv,
 		skb->len += ETH_HLEN; //sizeof(sb->mac.ethernet);
 
 		memcpy(eh->h_source, eh->h_dest,ETH_ALEN);
-		memcpy(eh->h_dest, cl_hwaddr,ETH_ALEN);
+		memcpy(eh->h_dest, cl_info[hdr->dest].hwaddr,ETH_ALEN);
 
-		printk("after2, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
+		//printk("after2, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 
 		ret=dev_queue_xmit(skb);
 
-		printk("got a packet2,%d\n",ret);
+		//printk("got a packet2,%d\n",ret);
 		return NF_STOLEN;
 
 		/*
 		err=ip_route_me_harder(state->net, skb, RTN_UNSPEC);
 		if(err<0)
 		{
-			printk("fail2");
+			printk("fail2.2");
 		}
 		skb_dst_drop(skb);
 		printk("got a packet,%d\n",err);
