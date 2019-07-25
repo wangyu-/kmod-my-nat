@@ -22,8 +22,7 @@ int my_port=8000;
 char tg_ip[]="45.76.100.53"; //ip of target
 int tg_port=9000;
 
-char if_to_tg[]="ens33";    //network interface to
-char if_to_cl[]="ens33";    //network interface to client
+char if_name[]="ens33";    //network interface, currently only support one interface
 
 //static unsigned char my_hwaddr[ETH_ALEN]={0x00,0x0c,0x29,0x98,0x3e,0x76};
 //static unsigned char tg_hwaddr[ETH_ALEN]={0x00,0x50,0x56,0xfd,0x42,0x9e};
@@ -37,7 +36,8 @@ u32_t tg_ip_u32;
 u16_t my_port_u16;
 u16_t tg_port_u16;
 
-u32_t last_ip;
+static unsigned char cl_hwaddr[ETH_ALEN]={0x0};
+u32_t cl_ip_u32;
 
 struct pseudo_header {
 	u_int32_t source_address;
@@ -130,6 +130,7 @@ static unsigned int pre_routing_hook(void *priv,
 	int hdrsize= sizeof(struct tcphdr);
 	int ret,err;
 	u16_t old_port;
+	int i,j,k;
 	iph = (void *)skb->data + iphdroff;
 	hdroff = iphdroff + iph->ihl * 4;	
 	if(iph->protocol!=6) return NF_ACCEPT;
@@ -153,10 +154,7 @@ static unsigned int pre_routing_hook(void *priv,
 
 		printk("before,%pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 
-		//last_ip=iph->saddr;
-		//old_port=hdr->dest;
-		//hdr->dest=dst_port_u16;
-		//inet_proto_csum_replace2(&hdr->check, skb, old_port , tg_port_u16, 0);
+		cl_ip_u32=iph->saddr;
 
 		csum_replace4(&iph->check, iph->daddr, tg_ip_u32);
 		iph->daddr = tg_ip_u32;
@@ -169,13 +167,20 @@ static unsigned int pre_routing_hook(void *priv,
 		tcp_chk_upd(iph->saddr,iph->daddr,hdr,tcp_tot_len);
 
 		skb->pkt_type = PACKET_OUTGOING;
-		struct net_device * dev = dev_get_by_name(&init_net, if_to_tg); 
+		struct net_device * dev = dev_get_by_name(&init_net, if_name); 
 		skb->dev=dev;
+
+		struct ethhdr *eh = eth_hdr(skb);
 		
-		skb->data = (unsigned char *)eth_hdr(skb);
+		skb->data = (unsigned char *)eh;
 		skb->len += ETH_HLEN; //sizeof(sb->mac.ethernet);
-		memcpy((eth_hdr(skb)->h_dest), tg_hwaddr,ETH_ALEN);
-		memcpy((eth_hdr(skb)->h_source), my_hwaddr,ETH_ALEN);
+
+
+		for(i=0;i<ETH_ALEN;i++)
+			cl_hwaddr[i]=eh->h_source[i];
+
+		memcpy(eh->h_dest, tg_hwaddr,ETH_ALEN);
+		memcpy(eh->h_source, my_hwaddr,ETH_ALEN);
 
 		printk("after, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 
@@ -183,6 +188,52 @@ static unsigned int pre_routing_hook(void *priv,
 
 		printk("got a packet,%d,%d\n",ret,dev);
 		return NF_STOLEN;
+
+		/*
+		err=ip_route_me_harder(state->net, skb, RTN_UNSPEC);
+		if(err<0)
+		{
+			printk("fail2");
+		}
+		skb_dst_drop(skb);
+		printk("got a packet,%d\n",err);
+		return NF_ACCEPT;*/
+	}
+
+	else if(iph->saddr==tg_ip_u32&&hdr->source==tg_port_u16 && iph->daddr==my_ip_u32)
+	{
+
+		printk("before,%pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
+
+		csum_replace4(&iph->check, iph->daddr, cl_ip_u32);
+		iph->daddr = cl_ip_u32;
+
+		csum_replace4(&iph->check, iph->saddr, my_ip_u32);
+		iph->saddr = my_ip_u32;
+		
+		hdr->source=my_port_u16;
+
+		tcp_chk_upd(iph->saddr,iph->daddr,hdr,tcp_tot_len);
+
+		skb->pkt_type = PACKET_OUTGOING;
+		struct net_device * dev = dev_get_by_name(&init_net, if_name); 
+		skb->dev=dev;
+
+		struct ethhdr *eh = eth_hdr(skb);
+		
+		skb->data = (unsigned char *)eh;
+		skb->len += ETH_HLEN; //sizeof(sb->mac.ethernet);
+
+		memcpy(eh->h_dest, cl_hwaddr,ETH_ALEN);
+		memcpy(eh->h_source, my_hwaddr,ETH_ALEN);
+
+		printk("after, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
+
+		ret=dev_queue_xmit(skb);
+
+		printk("got a packet,%d,%d\n",ret,dev);
+		return NF_STOLEN;
+
 		/*
 		err=ip_route_me_harder(state->net, skb, RTN_UNSPEC);
 		if(err<0)
