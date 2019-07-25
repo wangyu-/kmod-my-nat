@@ -148,15 +148,17 @@ static unsigned int pre_routing_hook(void *priv,
 			return NF_ACCEPT;
 		}*/
 
-		printk("before,%pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
+		printk("before1,%pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 
 		cl_ip_u32=iph->saddr;
 
-		csum_replace4(&iph->check, iph->daddr, tg_ip_u32);
+		//csum_replace4(&iph->check, iph->daddr, tg_ip_u32);
 		iph->daddr = tg_ip_u32;
 
-		csum_replace4(&iph->check, iph->saddr, my_ip_u32);
+		//csum_replace4(&iph->check, iph->saddr, my_ip_u32);
 		iph->saddr = my_ip_u32;
+		iph->check=0;
+		iph->check=csum_with_header(0,0,(u16_t*)iph,iph->ihl*4);
 		
 		hdr->dest=tg_port_u16;
 
@@ -178,11 +180,11 @@ static unsigned int pre_routing_hook(void *priv,
 		memcpy(eh->h_source, eh->h_dest,ETH_ALEN);
 		memcpy(eh->h_dest, tg_hwaddr,ETH_ALEN);
 
-		printk("after, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
+		printk("after1, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 
 		ret=dev_queue_xmit(skb);
 
-		printk("got a packet,%d\n",ret);
+		printk("got a packet1,%d\n",ret);
 		return NF_STOLEN;
 
 		/*
@@ -199,13 +201,16 @@ static unsigned int pre_routing_hook(void *priv,
 	else if(iph->saddr==tg_ip_u32&&hdr->source==tg_port_u16 && iph->daddr==my_ip_u32)
 	{
 
-		printk("before,%pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
+		printk("before2,%pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 
-		csum_replace4(&iph->check, iph->daddr, cl_ip_u32);
+		//csum_replace4(&iph->check, iph->daddr, cl_ip_u32);
 		iph->daddr = cl_ip_u32;
 
-		csum_replace4(&iph->check, iph->saddr, my_ip_u32);
+		//csum_replace4(&iph->check, iph->saddr, my_ip_u32);
 		iph->saddr = my_ip_u32;
+
+		iph->check=0;
+		iph->check=csum_with_header(0,0,(u16_t*)iph,iph->ihl*4);
 		
 		hdr->source=my_port_u16;
 
@@ -223,11 +228,11 @@ static unsigned int pre_routing_hook(void *priv,
 		memcpy(eh->h_source, eh->h_dest,ETH_ALEN);
 		memcpy(eh->h_dest, cl_hwaddr,ETH_ALEN);
 
-		printk("after, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
+		printk("after2, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 
 		ret=dev_queue_xmit(skb);
 
-		printk("got a packet,%d\n",ret);
+		printk("got a packet2,%d\n",ret);
 		return NF_STOLEN;
 
 		/*
