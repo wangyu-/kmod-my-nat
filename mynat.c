@@ -338,7 +338,7 @@ int init_module()
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,13,0)
 	ret=nf_register_net_hooks(&init_net, nf_my_nat_ops, ARRAY_SIZE(nf_my_nat_ops));
 #else
-	ret=nf_register_hooks(nf_my_nat_ops, ARRAY_SIZE(nf_my_nat_ops))
+	ret=nf_register_hooks(nf_my_nat_ops, ARRAY_SIZE(nf_my_nat_ops));
 #endif
 
 	my_ip_u32=in_aton(my_ip);
