@@ -50,7 +50,7 @@ struct client_info_t
 	unsigned char hwaddr[ETH_ALEN];
 };
 
-struct client_info_t cl_info[65535]; //a dirty hash table to remember info of clients.   
+struct client_info_t cl_info[65536]; //a dirty hash table to remember info of clients.   
 //hash by port of client
 //there will be problems if two clients use the same port (but its rare)
 //TODO fix it later
@@ -171,11 +171,11 @@ static unsigned int pre_routing_hook(void *priv,
 	
 	if(iph->daddr==my_ip_u32&&hdr->dest==my_port_u16)
 	{
-		if (!skb_make_writable(skb, iphdroff + skb->len))
+		/*if (!skb_make_writable(skb, iphdroff + skb->len))
 		{	
 			printk("fail1.0\n");
 			return NF_ACCEPT;
-		}
+		}*/
 
 		//printk("before1,%pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 
@@ -231,11 +231,11 @@ static unsigned int pre_routing_hook(void *priv,
 
 	else if(iph->saddr==tg_ip_u32&&hdr->source==tg_port_u16 && iph->daddr==my_ip_u32)
 	{
-		if (!skb_make_writable(skb, iphdroff + skb->len))
+		/*if (!skb_make_writable(skb, iphdroff + skb->len))
 		{	
 			printk("fail2.0\n");
 			return NF_ACCEPT;
-		}
+		}*/
 
 		//printk("before2,%pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
 		u32_t cl_ip_u32=cl_info[hdr->dest].ip_u32;
