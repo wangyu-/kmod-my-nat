@@ -273,17 +273,11 @@ static unsigned int post_routing_hook (void *priv,
 	if(skb->len < hdroff + sizeof(struct tcphdr)) return NF_ACCEPT;
 	hdr = (struct tcphdr *)(skb->data + hdroff);
 
-/*	
-	if(iph->daddr==my_ip_u32&&hdr->dest==my_port_u16)
+
+	if(iph->daddr==tg_ip_u32)
 	{
-		if (!skb_make_writable(skb, iphdroff + sizeof(*iph)))
-		{	
-			printk("fail1");
-			return NF_ACCEPT;
-		}
-		csum_replace4(&iph->check, iph->daddr, dst_ip_u32);
-		iph->daddr = dst_ip_u32;
-	}*/
+		//printk("catch, %pM %pM\n",eth_hdr(skb)->h_source,eth_hdr(skb)->h_dest);
+	}
 	return NF_ACCEPT;	
 }
 
@@ -298,12 +292,6 @@ static struct nf_hook_ops nf_my_nat_ops[] = {
                 .hook           = post_routing_hook,
                 .pf             = NFPROTO_IPV4,
                 .hooknum        = NF_INET_POST_ROUTING,
-                .priority       = NF_IP_PRI_FIRST,
-        },
-        {
-                .hook           = local_out_hook,
-                .pf             = NFPROTO_IPV4,
-                .hooknum        = NF_INET_LOCAL_OUT,
                 .priority       = NF_IP_PRI_FIRST,
         },
 };
